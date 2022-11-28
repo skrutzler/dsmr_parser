@@ -18,6 +18,10 @@ def console():
                         help='TCP port to use for connection')
     parser.add_argument('--version', default='2.2', choices=['2.2', '4', '5', '5B', '5L', '5S', 'Q3D'],
                         help='DSMR version (2.2, 4, 5, 5B, 5L, 5S, Q3D)')
+    parser.add_argument('--encryptionkey', default='',
+                        help='specify the encryption key')
+    parser.add_argument('--authenticationkey', default='',
+                        help='specify the authentication key')
     parser.add_argument('--verbose', '-v', action='count')
 
     args = parser.parse_args()
@@ -41,11 +45,13 @@ def console():
     if args.host and args.port:
         create_connection = partial(create_tcp_dsmr_reader,
                                     args.host, args.port, args.version,
-                                    print_callback, loop=loop)
+                                    print_callback, loop=loop,
+                                    encrytion_key=args.encryptionkey, authentication_key=args.authenticationkey)
     else:
         create_connection = partial(create_dsmr_reader,
                                     args.device, args.version,
-                                    print_callback, loop=loop)
+                                    print_callback, loop=loop,
+                                    encrytion_key=args.encryptionkey, authentication_key=args.authenticationkey)
 
     try:
         # connect and keep connected until interrupted by ctrl-c

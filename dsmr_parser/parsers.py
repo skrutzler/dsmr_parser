@@ -16,25 +16,28 @@ logger = logging.getLogger(__name__)
 class TelegramParser(object):
     crc16_tab = []
 
-    def __init__(self, telegram_specification, apply_checksum_validation=True):
+    def __init__(self, telegram_specification, apply_checksum_validation=True, *, encryption_key="",
+                 authentication_key=""):
         """
         :param telegram_specification: determines how the telegram is parsed
         :param apply_checksum_validation: validate checksum if applicable for
             telegram DSMR version (v4 and up).
+        :param str encryption_key: encryption key
+        :param str authentication_key: authentication key
         :type telegram_specification: dict
         """
         self.telegram_specification = telegram_specification
         self.apply_checksum_validation = apply_checksum_validation
+        self.encryption_key = encryption_key
+        self.authentication_key = authentication_key
 
-    def parse(self, telegram_data, encryption_key="", authentication_key=""):  # noqa: C901
+    def parse(self, telegram_data):
         """
         Parse telegram from string to dict.
         The telegram str type makes python 2.x integration easier.
 
         :param str telegram_data: full telegram from start ('/') to checksum
             ('!ABCD') including line endings in between the telegram's lines
-        :param str encryption_key: encryption key
-        :param str authentication_key: authentication key
         :rtype: dict
         :returns: Shortened example:
             {
@@ -50,8 +53,8 @@ class TelegramParser(object):
 
         if "general_global_cipher" in self.telegram_specification:
             if self.telegram_specification["general_global_cipher"]:
-                enc_key = unhexlify(encryption_key)
-                auth_key = unhexlify(authentication_key)
+                enc_key = unhexlify(self.encryption_key)
+                auth_key = unhexlify(self.authentication_key)
                 telegram_data = unhexlify(telegram_data)
                 apdu = XDlmsApduFactory.apdu_from_bytes(apdu_bytes=telegram_data)
                 if apdu.security_control.security_suite != 0:
