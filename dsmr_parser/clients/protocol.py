@@ -14,14 +14,17 @@ from dsmr_parser.clients.settings import SERIAL_SETTINGS_V2_2, \
     SERIAL_SETTINGS_V4, SERIAL_SETTINGS_V5
 
 
-def create_dsmr_protocol(dsmr_version, telegram_callback, loop=None, **kwargs):
+def create_dsmr_protocol(dsmr_version, telegram_callback, loop=None, encryption_key="",
+                         authentication_key="", **kwargs):
     """Creates a DSMR asyncio protocol."""
     protocol = _create_dsmr_protocol(dsmr_version, telegram_callback,
-                                     DSMRProtocol, loop, **kwargs)
+                                     DSMRProtocol, loop, encryption_key=encryption_key,
+                                     authentication_key=authentication_key, **kwargs)
     return protocol
 
 
-def _create_dsmr_protocol(dsmr_version, telegram_callback, protocol, loop=None, **kwargs):
+def _create_dsmr_protocol(dsmr_version, telegram_callback, protocol, loop=None, encryption_key="",
+                          authentication_key="", **kwargs):
     """Creates a DSMR asyncio protocol."""
 
     if dsmr_version == '2.2':
@@ -52,16 +55,17 @@ def _create_dsmr_protocol(dsmr_version, telegram_callback, protocol, loop=None, 
         raise NotImplementedError("No telegram parser found for version: %s",
                                   dsmr_version)
 
-    protocol = partial(protocol, loop, TelegramParser(specification),
-                       telegram_callback=telegram_callback, **kwargs)
+    protocol = partial(protocol, loop, TelegramParser(specification, encryption_key=encryption_key,
+                       authentication_key=authentication_key), telegram_callback=telegram_callback, **kwargs)
 
     return protocol, serial_settings
 
 
-def create_dsmr_reader(port, dsmr_version, telegram_callback, loop=None):
+def create_dsmr_reader(port, dsmr_version, telegram_callback, loop=None, encryption_key="", authentication_key=""):
     """Creates a DSMR asyncio protocol coroutine using serial port."""
     protocol, serial_settings = create_dsmr_protocol(
-        dsmr_version, telegram_callback, loop=None)
+        dsmr_version, telegram_callback, loop=None, encryption_key=encryption_key,
+        authentication_key=authentication_key)
     serial_settings['url'] = port
 
     conn = create_serial_connection(loop, protocol, **serial_settings)
@@ -70,13 +74,15 @@ def create_dsmr_reader(port, dsmr_version, telegram_callback, loop=None):
 
 def create_tcp_dsmr_reader(host, port, dsmr_version,
                            telegram_callback, loop=None,
-                           keep_alive_interval=None):
+                           keep_alive_interval=None,
+                           encryption_key="", authentication_key=""):
     """Creates a DSMR asyncio protocol coroutine using TCP connection."""
     if not loop:
         loop = asyncio.get_event_loop()
     protocol, _ = create_dsmr_protocol(
         dsmr_version, telegram_callback, loop=loop,
-        keep_alive_interval=keep_alive_interval)
+        keep_alive_interval=keep_alive_interval,
+        encryption_key=encryption_key, authentication_key=authentication_key)
     conn = loop.create_connection(protocol, host, port)
     return conn
 

@@ -55,53 +55,53 @@ class TelegramParserEncryptedTest(unittest.TestCase):
         return full_frame
 
     def test_parse(self):
-        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R)
-        result = parser.parse(self.__generate_encrypted().hex(),
-                              self.DUMMY_ENCRYPTION_KEY,
-                              self.DUMMY_AUTHENTICATION_KEY)
+        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R, encryption_key=self.DUMMY_ENCRYPTION_KEY,
+                                authentication_key=self.DUMMY_AUTHENTICATION_KEY)
+        result = parser.parse(self.__generate_encrypted().hex())
         self.assertEqual(len(result), 18)
 
     def test_damaged_frame(self):
         # If the frame is damaged decrypting fails (crc is technically not needed)
-        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R)
-
+        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R, encryption_key=self.DUMMY_ENCRYPTION_KEY,
+                                authentication_key=self.DUMMY_AUTHENTICATION_KEY)
         generated = self.__generate_encrypted()
         generated[150] = 0x00
         generated = generated.hex()
 
         with self.assertRaises(DecryptionError):
-            parser.parse(generated, self.DUMMY_ENCRYPTION_KEY, self.DUMMY_AUTHENTICATION_KEY)
+            parser.parse(generated)
 
     def test_plain(self):
         # If a plain request is parsed with "general_global_cipher": True it fails
-        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R)
+        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R, encryption_key=self.DUMMY_ENCRYPTION_KEY,
+                                authentication_key=self.DUMMY_AUTHENTICATION_KEY)
 
         with self.assertRaises(Exception):
-            parser.parse(TELEGRAM_SAGEMCOM_T210_D_R, self.DUMMY_ENCRYPTION_KEY, self.DUMMY_AUTHENTICATION_KEY)
+            parser.parse(TELEGRAM_SAGEMCOM_T210_D_R)
 
     def test_general_global_cipher_not_specified(self):
         # If a GGC frame is detected but general_global_cipher is not set it fails
-        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R)
+        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R, encryption_key=self.DUMMY_ENCRYPTION_KEY,
+                                authentication_key=self.DUMMY_AUTHENTICATION_KEY)
         parser = deepcopy(parser)  # We do not want to change the module value
         parser.telegram_specification['general_global_cipher'] = False
 
         with self.assertRaises(ParseError):
-            parser.parse(self.__generate_encrypted().hex(), self.DUMMY_ENCRYPTION_KEY, self.DUMMY_AUTHENTICATION_KEY)
+            parser.parse(self.__generate_encrypted().hex())
 
     def test_only_encrypted(self):
         # Not implemented by dlms_cosem
-        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R)
-
+        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R, encryption_key=self.DUMMY_ENCRYPTION_KEY)
         only_auth = self.__generate_encrypted(0, authenticated=False, encrypted=True).hex()
 
         with self.assertRaises(ValueError):
-            parser.parse(only_auth, self.DUMMY_ENCRYPTION_KEY)
+            parser.parse(only_auth)
 
     def test_only_auth(self):
         # Not implemented by dlms_cosem
-        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R)
-
+        parser = TelegramParser(telegram_specifications.SAGEMCOM_T210_D_R,
+                                authentication_key=self.DUMMY_AUTHENTICATION_KEY)
         only_auth = self.__generate_encrypted(0, authenticated=True, encrypted=False).hex()
 
         with self.assertRaises(ValueError):
-            parser.parse(only_auth, authentication_key=self.DUMMY_AUTHENTICATION_KEY)
+            parser.parse(only_auth)
