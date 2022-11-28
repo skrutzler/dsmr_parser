@@ -13,6 +13,10 @@ from dsmr_parser.parsers import TelegramParser
 from dsmr_parser.clients.settings import SERIAL_SETTINGS_V2_2, \
     SERIAL_SETTINGS_V4, SERIAL_SETTINGS_V5
 
+from binascii import unhexlify
+from dlms_cosem.connection import XDlmsApduFactory
+from dlms_cosem.protocol.xdlms import GeneralGlobalCipher
+
 
 def create_dsmr_protocol(dsmr_version, telegram_callback, loop=None, encryption_key="",
                          authentication_key="", **kwargs):
@@ -50,6 +54,9 @@ def _create_dsmr_protocol(dsmr_version, telegram_callback, protocol, loop=None, 
         serial_settings = SERIAL_SETTINGS_V5
     elif dsmr_version == "Q3D":
         specification = telegram_specifications.Q3D
+        serial_settings = SERIAL_SETTINGS_V5
+    elif dsmr_version == "T210":
+        specification = telegram_specifications.SAGEMCOM_T210_D_R
         serial_settings = SERIAL_SETTINGS_V5
     else:
         raise NotImplementedError("No telegram parser found for version: %s",
@@ -94,7 +101,8 @@ class DSMRProtocol(asyncio.Protocol):
     telegram_callback = None
 
     def __init__(self, loop, telegram_parser,
-                 telegram_callback=None, keep_alive_interval=None):
+                 telegram_callback=None, keep_alive_interval=None,
+                 encryption_key="", authentication_key=""):
         """Initialize class."""
         self.loop = loop
         self.log = logging.getLogger(__name__)
@@ -106,6 +114,8 @@ class DSMRProtocol(asyncio.Protocol):
         # keep a lock until the connection is closed
         self._closed = asyncio.Event()
         self._keep_alive_interval = keep_alive_interval
+        self.encryption_key = encryption_key
+        self.authentication_key = authentication_key
         self._active = True
 
     def connection_made(self, transport):
@@ -123,6 +133,39 @@ class DSMRProtocol(asyncio.Protocol):
         data = data.decode("latin1")
         self._active = True
         self.log.debug('received data: %s', data)
+
+        if "general_global_cipher" in self.telegram_parser.telegram_specification:
+            if self.telegram_parser.telegram_specification["general_global_cipher"]:
+                enc_key = unhexlify(self.encryption_key)
+                auth_key = unhexlify(self.authentication_key)
+                data = unhexlify(data)
+                apdu = XDlmsApduFactory.apdu_from_bytes(apdu_bytes=data)
+                if apdu.security_control.security_suite != 0:
+                    self.log.warning("Untested security suite")
+                if apdu.security_control.authenticated and not apdu.security_control.encrypted:
+                    self.log.warning("Untested authentication only")
+                if not apdu.security_control.authenticated and not apdu.security_control.encrypted:
+                    self.log.warning("Untested not encrypted or authenticated")
+                if apdu.security_control.compressed:
+                    self.log.warning("Untested compression")
+                if apdu.security_control.broadcast_key:
+                    self.log.warning("Untested broadcast key")
+                data = apdu.to_plain_apdu(enc_key, auth_key).decode("ascii")
+                self.log.debug('encoded data: %s', data)
+            else:
+                try:
+                    if unhexlify(data[0:2])[0] == GeneralGlobalCipher.TAG:
+                        raise RuntimeError("Looks like a general_global_cipher frame "
+                                           "but telegram specification is not matching!")
+                except Exception:
+                    pass
+        else:
+            try:
+                if unhexlify(data[0:2])[0] == GeneralGlobalCipher.TAG:
+                    raise RuntimeError(
+                        "Looks like a general_global_cipher frame but telegram specification is not matching!")
+            except Exception:
+                pass
         self.telegram_buffer.append(data)
 
         for telegram in self.telegram_buffer.get_all():
